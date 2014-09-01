@@ -1,3 +1,4 @@
-server: gunicorn -w 5 -b :$PORT wsgi
-worker: celery -A worker.celery worker
+rest: python -u app.py
+wamp: python -u ws.py
+work: celery -A worker.celery worker
 beat: celery -A worker.celery beat

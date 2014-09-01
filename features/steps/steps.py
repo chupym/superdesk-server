@@ -6,7 +6,7 @@ from behave import given, when, then  # @UnresolvedImport
 from flask import json
 from eve.methods.common import parse
 
-from wooper.general import parse_json_input, fail_and_print_body, apply_path,\
+from wooper.general import fail_and_print_body, apply_path,\
     parse_json_response
 from wooper.expect import (
     expect_status, expect_status_in,
@@ -16,6 +16,8 @@ from wooper.expect import (
 )
 from wooper.assertions import (
     assert_in, assert_equal)
+from urllib.parse import urlparse
+from os.path import basename
 
 external_url = 'http://thumbs.dreamstime.com/z/digital-nature-10485007.jpg'
 
@@ -26,7 +28,7 @@ def test_json(context):
     except Exception:
         fail_and_print_body(context.response, 'response is not valid json')
 
-    context_data = parse_json_input(context.text)
+    context_data = json.loads(apply_placeholders(context, context.text))
     assert_equal(json_match(context_data, response_data), True,
                  msg=str(context_data) + '\n != \n' + str(response_data))
 
@@ -35,6 +37,7 @@ def json_match(context_data, response_data):
     if isinstance(context_data, dict):
         for key in context_data:
             if key not in response_data:
+                print(key, ' not in ', response_data)
                 return False
             if not context_data[key]:
                 continue
@@ -49,9 +52,12 @@ def json_match(context_data, response_data):
                     found = True
                     break
             if not found:
+                print(item_context, ' not in ', context_data)
                 return False
         return True
     elif not isinstance(context_data, dict):
+        if context_data != response_data:
+            print(context_data, ' != ', response_data)
         return context_data == response_data
 
 
@@ -228,7 +234,9 @@ def step_impl_when_post_url(context, url):
     if context.response.status_code in (200, 201):
         item = json.loads(context.response.get_data())
         if item['_status'] == 'OK' and item.get('_id'):
-            set_placeholder(context, '%s_ID' % url.upper(), item['_id'])
+            parsed_url = urlparse(url)
+            name = basename(parsed_url.path)
+            set_placeholder(context, '%s_ID' % name.upper(), item['_id'])
 
 
 @when('we put to "{url}"')
@@ -247,6 +255,7 @@ def when_we_get_url(context, url):
             key, val = line.split(': ')
             headers.append((key, val))
     headers = unique_headers(headers, context.headers)
+    url = apply_placeholders(context, url)
     context.response = context.client.get(url, headers=headers)
 
 
@@ -382,17 +391,7 @@ def step_impl_then_get_list(context, total_count):
     expect_json_length(context.response, int(total_count), path='_items')
     if total_count == 0 or not context.text:
         return
-    # @TODO: generalize json schema check
-    schema = json.loads(apply_placeholders(context, context.text))
-    response_list = json.loads(context.response.get_data())
-    item = response_list['_items'][0]
-    for key in schema:
-        assert_in(key, item, '%s not in %s' % (key, item))
-        if isinstance(schema[key], dict):
-            for keykey in schema[key]:
-                assert_in(keykey, item[key])
-        else:
-            assert_equal(schema[key], item[key])
+    test_json(context)
 
 
 @then('we get no "{field}"')
@@ -537,6 +536,33 @@ def step_impl_then_get_renditions(context, type):
         assert 'href' in desc, 'expected href in rendition description'
         assert 'media' in desc, 'expected media identifier in rendition description'
         we_can_fetch_a_file(context, desc['href'], 'image/jpeg')
+
+
+@then('item "{item_id}" is unlocked')
+def then_item_is_unlocked(context, item_id):
+    context.response = context.client.get('/archive/%s' % item_id, headers=context.headers)
+    assert_200(context.response)
+    data = json.loads(context.response.get_data())
+    assert data.get('lock_user', None) is None, 'item is locked by user #{0}'.format(data.get('lock_user'))
+
+
+@then('item "{item_id}" is locked')
+def then_item_is_locked(context, item_id):
+    context.response = context.client.get('/archive/%s' % item_id, headers=context.headers)
+    assert_200(context.response)
+    resp = parse_json_response(context.response)
+    assert resp['lock_user'] is not None
+
+
+@then('we get rendition "{name}" with mimetype "{mimetype}"')
+def step_impl_then_get_rendition_with_mimetype(context, name, mimetype):
+    expect_json_contains(context.response, 'renditions')
+    renditions = apply_path(parse_json_response(context.response), 'renditions')
+    assert isinstance(renditions, dict), 'expected dict for image renditions'
+    desc = renditions[name]
+    assert isinstance(desc, dict), 'expected dict for rendition description'
+    assert 'href' in desc, 'expected href in rendition description'
+    we_can_fetch_a_file(context, desc['href'], mimetype)
 
 
 def import_rendition(context, rendition_name=None):
@@ -779,5 +805,15 @@ def when_we_get_my_url(context, url):
 @when('we get user "{resource}"')
 def when_we_get_user_resource(context, resource):
     url = '/users/{0}/{1}'.format(str(context.user.get('_id')), resource)
-    print('fetching', url)
     return when_we_get_url(context, url)
+
+
+@then('we get embedded items')
+def step_impl(context):
+    response_data = json.loads(context.response.get_data())
+    href = get_self_href(response_data, context)
+    url = href + '/?embedded={"items": 1}'
+    context.response = context.client.get(url, headers=context.headers)
+    assert_200(context.response)
+    context.response_data = json.loads(context.response.get_data())
+    assert len(context.response_data['items']['view_items']) == 2

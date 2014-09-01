@@ -72,7 +72,7 @@ class ArchiveModel(BaseModel):
         if lock_user and str(lock_user) != str(user['_id']):
             raise superdesk.SuperdeskError(payload='The item was locked by another user')
         updates['versioncreated'] = utcnow()
-        updates['creator'] = str(user.get('_id'))
+        updates['version_creator'] = str(user.get('_id'))
 
     def on_updated(self, updates, original):
         on_update_media_archive()
@@ -129,3 +129,19 @@ class ArchiveModel(BaseModel):
         del doc['last_version']
         doc.update(old)
         return res
+
+
+class AutoSaveModel(BaseModel):
+    endpoint_name = 'autosave'
+    resource_title = endpoint_name
+    url = '{0}/<{1}:guid>/autosave'.format(ArchiveModel.endpoint_name, item_url)
+    schema = {k: base_schema[k] for k in ('headline', 'byline', 'slugline', 'keywords', 'body_html', 'guid')}
+    resource_methods = ['POST']
+    item_methods = []
+    datasource = {'source': 'archive'}
+
+    def create(self, docs, **kwargs):
+        doc = docs.pop()
+        doc.pop('_created')
+        guid = doc.pop('guid')
+        return self.update(guid, doc)

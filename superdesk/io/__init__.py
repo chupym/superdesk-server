@@ -6,6 +6,7 @@ from superdesk.utc import utcnow
 from superdesk.base_model import BaseModel
 from flask import current_app as app
 from superdesk.celery_app import celery
+from superdesk.notification import push_notification
 
 
 logger = logging.getLogger(__name__)
@@ -30,8 +31,8 @@ def ingest_items(provider, items):
         ingested_count = provider.get('ingested_count', 0)
         for item in items:
             item.setdefault('_id', item['guid'])
-            item.setdefault('created', utcnow())
-            item.setdefault('updated', utcnow())
+            item.setdefault('_created', utcnow())
+            item.setdefault('_updated', utcnow())
             item['ingest_provider'] = str(provider['_id'])
             old_item = app.data.find_one('ingest', guid=item['guid'], req=None)
             if old_item:
@@ -41,7 +42,7 @@ def ingest_items(provider, items):
                 app.data.insert('ingest', [item], ttl='7d')
 
         app.data.update('ingest_providers', provider['_id'], {
-            'updated': start,
+            '_updated': start,
             'ingested_count': ingested_count
         })
 
@@ -66,6 +67,8 @@ class UpdateIngest(superdesk.Command):
                 except (Exception) as err:
                     logger.exception(err)
                     pass
+                finally:
+                    push_notification('ingest:update')
 
 
 class AddProvider(superdesk.Command):
@@ -78,8 +81,8 @@ class AddProvider(superdesk.Command):
     def run(self, provider=None):
         if provider:
             data = superdesk.json.loads(provider)
-            data.setdefault('created', utcnow())
-            data.setdefault('updated', utcnow())
+            data.setdefault('_created', utcnow())
+            data.setdefault('_updated', utcnow())
             data.setdefault('name', data['type'])
             db = superdesk.get_db()
             db['ingest_providers'].save(data)
@@ -121,4 +124,5 @@ class IngestProviderModel(BaseModel):
             'type': 'dict'
         }
     }
+
     endpoint_name = 'ingest_providers'

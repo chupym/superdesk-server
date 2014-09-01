@@ -1,10 +1,9 @@
-import logging
 
-from eve.methods.post import post_internal
+import logging
 import flask
 
+from eve.methods.post import post_internal
 from superdesk.notification import push_notification
-
 from .base_model import BaseModel
 
 
@@ -28,14 +27,7 @@ class AuditModel(BaseModel):
         'resource': {'type': 'string'},
         'action': {'type': 'string'},
         'extra': {'type': 'dict'},
-        'user': {
-            'type': 'objectid',
-            'data_relation': {
-                'resource': 'users',
-                'field': '_id',
-                'embeddable': False
-            }
-        }
+        'user': BaseModel.rel('users', False)
     }
     exclude = {endpoint_name, 'activity'}
 
@@ -121,4 +113,5 @@ def add_activity(msg, **data):
         'message': msg,
         'data': data
     })
-    push_notification(ActivityModel.endpoint_name, created=1, keys=(user.get('_id'),))
+
+    push_notification(ActivityModel.endpoint_name, created=1, keys=(str(user.get('_id')),))

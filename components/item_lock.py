@@ -1,7 +1,8 @@
 from models.item import ItemModel
-from models.base_model import ETAG
+# from models.base_model import ETAG
 from superdesk import SuperdeskError
 from superdesk.utc import utcnow
+from superdesk.notification import push_notification
 
 
 LOCK_USER = 'lock_user'
@@ -20,18 +21,19 @@ class ItemLock():
             updates = {LOCK_USER: user, 'lock_time': utcnow()}
             item_model.update(filter, updates)
             item[LOCK_USER] = user
+            push_notification('item:lock', item=str(item.get('_id')), user=str(user))
         else:
             raise SuperdeskError('Item locked by another user')
         return item
 
     def unlock(self, filter, user, etag):
-        item_model = ItemModel()
-        filter[LOCK_USER] = user
-        filter[ETAG] = etag
+        item_model = ItemModel(self.data_layer)
+        # filter[ETAG] = etag
         item = item_model.find_one(filter)
         if item:
-            update = {LOCK_USER: None}
-            item_model.update(filter, update)
+            updates = {LOCK_USER: None, 'lock_time': None}
+            item_model.update(filter, updates)
+            push_notification('item:unlock', item=str(filter.get('_id')))
 
     def _can_lock(self, item, user):
         # TODO: implement

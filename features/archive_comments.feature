@@ -14,7 +14,7 @@ Feature: News Items Archive Comments
         And we get "/item_comments"
         Then we get list with 1 items
         """
-        {"text": "test comment", "item": "xyz"}
+        {"_items": [{"text": "test comment", "item": "xyz"}]}
         """
 
     @auth
@@ -50,7 +50,7 @@ Feature: News Items Archive Comments
         And we get "/archive/xyz/comments"
         Then we get list with 1 items
         """
-        {"text": "test comment", "item": "xyz"}
+        {"_items": [{"text": "test comment", "item": "xyz"}]}
         """
 
     @auth
@@ -101,5 +101,5 @@ Feature: News Items Archive Comments
         """
         Then we get error 400
         """
-        {"_message": "", "_issues": "Invalid content item ID provided: xyz", "_status": "ERR"}
+        {"_issues": {"item": "value 'xyz' must exist in resource 'archive', field '_id'."}, "_status": "ERR", "_error": {"code": 400, "message": "Insertion failure: 1 document(s) contain(s) error(s)"}}
         """
