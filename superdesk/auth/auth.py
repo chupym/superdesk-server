@@ -114,10 +114,13 @@ def raiseCredentialsAuthError(credentials):
 
 
 class AuthUsersModel(BaseModel):
+    """ This resource is for authentication only.
+
+    On users `find_one` never returns a password due to the projection.
+    """
+
     endpoint_name = 'auth_users'
-    datasource = {
-        'source': 'users'
-    }
+    datasource = {'source': 'users'}
     schema = {
         'username': {
             'type': 'string',
@@ -128,17 +131,19 @@ class AuthUsersModel(BaseModel):
     }
     item_methods = []
     resource_methods = []
+    internal_resource = True
 
 
 class AuthModel(BaseModel):
-
     endpoint_name = 'auth'
     schema = {
         'username': {
-            'type': 'string'
+            'type': 'string',
+            'required': True
         },
         'password': {
-            'type': 'string'
+            'type': 'string',
+            'required': True
         },
         'token': {
             'type': 'string'
@@ -155,3 +160,4 @@ class AuthModel(BaseModel):
             user = authenticate(doc, app.data)
             doc['user'] = user['_id']
             doc['token'] = utils.get_random_string(40)
+            del doc['password']
