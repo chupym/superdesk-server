@@ -6,10 +6,10 @@ import datetime
 import superdesk
 
 from superdesk.utc import utcnow
-from .newsml import Parser
+from .newsml_2_0 import Parser
 from .reuters_token import get_token
-from ..utc import utc
-from ..etree import etree
+from superdesk.utc import utc
+from superdesk.etree import etree
 from urllib.parse import urlparse, urlunparse
 
 PROVIDER = 'reuters'
@@ -144,4 +144,3 @@ def on_read_ingest(data, docs):
 
 
 superdesk.connect('read:ingest', on_read_ingest)
-superdesk.provider(PROVIDER, ReutersUpdateService())

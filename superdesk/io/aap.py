@@ -2,9 +2,8 @@
 import os
 from datetime import datetime, timedelta
 
-import superdesk
 from .nitf import parse
-from ..utc import utc, utcnow, timezone
+from superdesk.utc import utc, utcnow, timezone
 
 PROVIDER = 'aap'
 
@@ -52,5 +51,3 @@ class AAPIngestService(object):
                     item['updated'] = item['versioncreated']
                     item.setdefault('provider', provider.get('name', provider['type']))
                     yield [item]
-
-superdesk.provider(PROVIDER, AAPIngestService())

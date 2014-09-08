@@ -39,7 +39,7 @@ CELERY_ACCEPT_CONTENT = ['pickle', 'json']  # it's using pickle when in eager mo
 
 CELERYBEAT_SCHEDULE = {
     'fetch_ingest': {
-        'task': 'superdesk.io.fetch_ingest',
+        'task': 'apps.io.fetch_ingest',
         'schedule': timedelta(minutes=5)
     }
 }
@@ -51,20 +51,19 @@ SENTRY_DSN = os.environ.get('SENTRY_DSN')
 SENTRY_INCLUDE_PATHS = ['superdesk']
 
 INSTALLED_APPS = (
-    'superdesk.io',
-    'superdesk.auth',
-    'superdesk.users',
-    'superdesk.archive',
-    'superdesk.activity',
+    'apps.auth',
+    'apps.users',
     'superdesk.upload',
-    'superdesk.desks',
-    'superdesk.subjectcodes',
-    'superdesk.storage.amazon.import_from_amazon',
     'superdesk.notification',
-    'superdesk.planning',
-    'superdesk.coverages',
+    'superdesk.storage.amazon.import_from_amazon',
+    'superdesk.io',
+    'apps.archive',
     'superdesk.workflow',
-    'superdesk.tasks',
+    'apps.activity',
+    'apps.desks',
+    'apps.planning',
+    'apps.coverages',
+    'apps.tasks',
 )
 
 RESOURCE_METHODS = ['GET', 'POST']
@@ -91,11 +90,6 @@ RENDITIONS = {
 }
 
 SERVER_DOMAIN = 'localhost'
-
-# uncomment to use local file storage
-# DEFAULT_FILE_STORAGE = 'superdesk.storage.FileSystemStorage'
-# abspath = os.path.abspath(os.path.dirname(__file__))
-# UPLOAD_FOLDER = os.path.join(abspath, 'upload')
 
 BCRYPT_GENSALT_WORK_FACTOR = 12
 RESET_PASSWORD_TOKEN_TIME_TO_LIVE = 24  # The number of hours a token is valid
