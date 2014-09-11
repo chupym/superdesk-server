@@ -1,6 +1,7 @@
 ''' Superdesk workflow.'''
+from superdesk.models import BaseModel
+import hashlib
 
-from superdesk.base_model import BaseModel
 
 WORKFLOW_DEFINITIONS = []
 
@@ -29,6 +30,8 @@ class Workflow(BaseModel):
     @classmethod
     def register(cls, definition):
         id_ = definition.__class__.__name__
+        id_ = hashlib.md5(id_.encode('utf_8')).hexdigest()[:24]
+        # We need to create 24 char long ids in order to be recognized by get item.
         WORKFLOW_DEFINITIONS.append((id_, definition))
         cls.workflows[id_] = {'_id': id_, 'name': definition.name}
 
@@ -47,7 +50,8 @@ class Workflow(BaseModel):
         return self.workflows.get(id_)
 
     def get(self, req, **lookup):
-        return Cursor(sorted(self.workflows.values()), len(self.workflows))
+        return Cursor(sorted(self.workflows.values(), key=lambda workflow: workflow['name']),
+                      len(self.workflows))
 
 
 class Workplace(BaseModel):
@@ -74,6 +78,9 @@ class Workstation(BaseModel):
             'type': 'string',
             'unique': True,
             'required': True,
+        },
+        'description': {
+            'type': 'string'
         },
         'members': {
             'type': 'list',
