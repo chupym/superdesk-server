@@ -8,35 +8,40 @@ Feature: Tasks
 
     @auth
     Scenario: Create new task
-        Given empty "users"
+        Given empty "desks"
+        Given empty "archive"
         Given empty "tasks"
-        When we post to "users"
+        When we post to "desks"
         """
-        {"username": "foo", "email": "foo@bar.com"}
+        {"name": "Sports Desk"}
         """
         When we post to "tasks"
 	    """
-	    [{"title": "first task", "type": "story", "assigned_user": "#USERS_ID#"}]
+        [{"slugline": "first task", "type": "text", "task": {"desk":"#DESKS_ID#"}}]
 	    """
+        When we post to "archive"
+        """
+        [{"type": "text"}]
+        """
         And we get "/tasks"
         Then we get list with 1 items
 	    """
-	    {"_items": [{"title": "first task", "type": "story", "assigned_user": "#USERS_ID#"}]}
+        {"_items": [{"slugline": "first task", "type": "text", "task": {"desk": "#DESKS_ID#"}}]}
 	    """
 
     @auth
     Scenario: Update task
         Given "tasks"
         """
-        [{"title": "testtask"}]
+        [{"slugline": "testtask", "task": {"status": "in-progress"}}]
         """
         When we patch given
         """
-        {"description":"the test task modified"}
+        {"description_text":"the test task modified"}
         """
         And we patch latest
         """
-        {"description":"the test of the test task modified"}
+        {"description_text":"the test of the test task modified"}
         """
         Then we get updated response
 
@@ -55,11 +60,11 @@ Feature: Tasks
         """
         When we post to "tasks"
 	    """
-	    [{"title": "first task", "type": "story", "assigned_user": "#USERS_ID#"}]
+        [{"slugline": "first task", "type": "text", "task": {"user": "#USERS_ID#"}}]
 	    """
         And we patch latest
         """
-        {"description": "second task modified", "assigned_desk":"#DESKS_ID#"}
+        {"description_text": "second task modified", "task": {"status": "in-progress", "desk":"#DESKS_ID#"}}
         """
         Then we get updated response
 
@@ -73,15 +78,15 @@ Feature: Tasks
         """
         When we post to "planning"
         """
-        {"headline": "test planning item"}
+        {"slugline": "test planning item"}
         """
         When we post to "tasks"
 	    """
-	    [{"title": "first task", "type": "story", "assigned_user": "#USERS_ID#"}]
+        [{"slugline": "first task", "type": "text", "task": {"user": "#USERS_ID#"}}]
 	    """
         And we patch latest
         """
-        {"description": "second task modified", "planning_item":"#PLANNING_ID#"}
+        {"description_text": "second task modified", "planning_item":"#PLANNING_ID#"}
         """
         Then we get updated response
 
@@ -96,7 +101,7 @@ Feature: Tasks
         """
         When we post to "tasks"
 	    """
-	    [{"title": "first task", "type": "story", "assigned_user": "#USERS_ID#"}]
+        [{"slugline": "first task", "type": "text", "task": {"user": "#USERS_ID#"}}]
 	    """
         And we delete latest
         Then we get deleted response

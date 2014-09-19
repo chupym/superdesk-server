@@ -22,30 +22,36 @@ VALIDATION_ERROR_STATUS = 400
 CACHE_CONTROL = 'max-age=0, no-cache'
 
 X_DOMAINS = '*'
+X_MAX_AGE = 24 * 3600
 X_HEADERS = ['Content-Type', 'Authorization', 'If-Match']
+
 
 MONGO_DBNAME = os.environ.get('MONGO_DBNAME', 'superdesk')
 if os.environ.get('MONGOLAB_URI'):
     MONGO_URI = os.environ.get('MONGOLAB_URI')
+elif os.environ.get('MONGODB_PORT'):
+    MONGO_URI = '{0}/{1}'.format(os.environ.get('MONGODB_PORT').replace('tcp:', 'mongodb:'), MONGO_DBNAME)
 
 ELASTICSEARCH_URL = os.environ.get('ELASTICSEARCH_URL', 'http://localhost:9200')
 ELASTICSEARCH_INDEX = os.environ.get('ELASTICSEARCH_INDEX', 'superdesk')
+if os.environ.get('ELASTIC_PORT'):
+    ELASTICSEARCH_URL = os.environ.get('ELASTIC_PORT').replace('tcp:', 'http:')
 
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379')
-CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379')
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379')
+if os.environ.get('REDIS_PORT'):
+    REDIS_URL = os.environ.get('REDIS_PORT').replace('tcp:', 'redis:')
+BROKER_URL = os.environ.get('CELERY_BROKER_URL', REDIS_URL)
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', REDIS_URL)
 CELERY_ALWAYS_EAGER = (os.environ.get('CELERY_ALWAYS_EAGER', False) == 'True')
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_ACCEPT_CONTENT = ['pickle', 'json']  # it's using pickle when in eager mode
 
 CELERYBEAT_SCHEDULE = {
     'fetch_ingest': {
-        'task': 'apps.io.fetch_ingest',
+        'task': 'superdesk.io.fetch_ingest',
         'schedule': timedelta(minutes=5)
     }
 }
-
-REUTERS_USERNAME = os.environ.get('REUTERS_USERNAME', '')
-REUTERS_PASSWORD = os.environ.get('REUTERS_PASSWORD', '')
 
 SENTRY_DSN = os.environ.get('SENTRY_DSN')
 SENTRY_INCLUDE_PATHS = ['superdesk']
@@ -56,7 +62,13 @@ INSTALLED_APPS = (
     'superdesk.upload',
     'superdesk.notification',
     'superdesk.storage.amazon.import_from_amazon',
+
     'superdesk.io',
+    'superdesk.io.subjectcodes',
+    'superdesk.io.reuters',
+    'superdesk.io.aap',
+    'superdesk.io.afp',
+
     'apps.archive',
     'superdesk.workflow',
     'apps.activity',
@@ -64,6 +76,7 @@ INSTALLED_APPS = (
     'apps.planning',
     'apps.coverages',
     'apps.tasks',
+    'apps.preferences',
 )
 
 RESOURCE_METHODS = ['GET', 'POST']
@@ -92,7 +105,7 @@ RENDITIONS = {
 SERVER_DOMAIN = 'localhost'
 
 BCRYPT_GENSALT_WORK_FACTOR = 12
-RESET_PASSWORD_TOKEN_TIME_TO_LIVE = 24  # The number of hours a token is valid
+RESET_PASSWORD_TOKEN_TIME_TO_LIVE = int(os.environ.get('RESET_PASS_TTL', 24))  # The number of hours a token is valid
 
 # email server
 MAIL_SERVER = os.environ.get('MAIL_SERVER', 'smtp.googlemail.com')

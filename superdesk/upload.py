@@ -3,11 +3,13 @@ import logging
 import superdesk
 from eve.utils import config
 from superdesk import SuperdeskError
-from .models import BaseModel
+from .resource import Resource
+from .services import BaseService
 from flask import url_for, Response, current_app as app, json
 from superdesk.media.renditions import generate_renditions, delete_file_on_error
 from superdesk.media.media_operations import download_file_from_url, process_file_from_stream, \
-    crop_image, decode_metadata
+    crop_image, decode_metadata, download_file_from_encoded_str
+
 
 bp = superdesk.Blueprint('upload_raw', __name__)
 superdesk.blueprint(bp)
@@ -28,11 +30,12 @@ def url_for_media(media_id):
 
 
 def init_app(app):
-    UploadModel(app=app)
-
-
-class UploadModel(BaseModel):
     endpoint_name = 'upload'
+    service = UploadService(endpoint_name, backend=superdesk.get_backend())
+    UploadResource(endpoint_name, app=app, service=service)
+
+
+class UploadResource(Resource):
     schema = {
         'media': {'type': 'file'},
         'CropLeft': {'type': 'integer'},
@@ -56,6 +59,9 @@ class UploadModel(BaseModel):
     }
     item_methods = ['GET', 'DELETE']
     resource_methods = ['GET', 'POST']
+
+
+class UploadService(BaseService):
 
     def on_create(self, docs):
         for doc in docs:
@@ -114,4 +120,7 @@ class UploadModel(BaseModel):
         url = doc.get('URL')
         if not url:
             return
-        return download_file_from_url(url)
+        if url.startswith('data'):
+            return download_file_from_encoded_str(url)
+        else:
+            return download_file_from_url(url)

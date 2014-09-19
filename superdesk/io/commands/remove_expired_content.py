@@ -5,7 +5,7 @@ from datetime import timedelta
 from superdesk.utc import utcnow
 from flask import current_app as app
 from superdesk.notification import push_notification
-from superdesk.io import DAYS_TO_KEEP
+from superdesk.io.ingest_provider_model import DAYS_TO_KEEP
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ def get_query_for_expired_items(provider_id, expiration_date):
              {
                  'must': [
                      {
-                         'range': {'ingest._created': {'lte': date_to_str(expiration_date)}}
+                         'range': {'ingest._updated': {'lte': date_to_str(expiration_date)}}
                      },
                      {
                          'term': {'ingest.ingest_provider': provider_id}

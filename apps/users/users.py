@@ -1,12 +1,16 @@
 """Superdesk Users"""
 
 import bcrypt
+import logging
 from flask import current_app as app
 
 import superdesk
-from superdesk.models import BaseModel
+from superdesk.resource import Resource
 from superdesk.utc import utcnow
 from apps.activity import add_activity
+from superdesk.services import BaseService
+
+logger = logging.getLogger(__name__)
 
 
 class EmptyUsernameException(Exception):
@@ -17,6 +21,11 @@ class EmptyUsernameException(Exception):
 class ConflictUsernameException(Exception):
     def __str__(self):
         return "Username '%s' exists already" % self.args[0]
+
+
+def is_hashed(pwd):
+    """Check if given password is hashed."""
+    return pwd.startswith('$2a$')
 
 
 def get_display_name(user):
@@ -31,17 +40,16 @@ def on_read_users(data, docs):
     """Set default fields for users"""
     for doc in docs:
         doc.setdefault('display_name', get_display_name(doc))
-        if doc.get('password'):
-            del doc['password']
+        doc.pop('password', None)
 
 
 def ensure_hashed_password(doc):
-    if doc.get('password', None):
+    if doc.get('password', None) and not is_hashed(doc.get('password')):
         doc['password'] = hash_password(doc.get('password'))
 
 
 def hash_password(password):
-    work_factor = app.config['BCRYPT_GENSALT_WORK_FACTOR']
+    work_factor = app.config.get('BCRYPT_GENSALT_WORK_FACTOR', 12)
     hashed = bcrypt.hashpw(password.encode('UTF-8'), bcrypt.gensalt(work_factor))
     return hashed.decode('UTF-8')
 
@@ -62,18 +70,22 @@ class CreateUserCommand(superdesk.Command):
             'username': username,
             'password': password,
             'email': email,
+            app.config['LAST_UPDATED']: utcnow(),
         }
 
-        user = superdesk.app.data.find_one('users', username=userdata.get('username'), req=None)
-        if user:
-            userdata[app.config['LAST_UPDATED']] = utcnow()
-            userdata['password'] = hash_password(userdata['password'])
-            superdesk.apps['users'].update(user.get('_id'), userdata, trigger_events=False)
-            return userdata
-        else:
-            userdata[app.config['DATE_CREATED']] = utcnow()
-            userdata[app.config['LAST_UPDATED']] = utcnow()
-            superdesk.apps['users'].create([userdata], trigger_events=True)
+        with app.test_request_context('/users', method='POST'):
+            ensure_hashed_password(userdata)
+            user = app.data.find_one('users', username=userdata.get('username'), req=None)
+            if user:
+                logger.info('updating user %s' % (userdata))
+                app.data.update('users', user.get('_id'), userdata)
+                return userdata
+            else:
+                logger.info('creating user %s' % (userdata))
+                userdata[app.config['DATE_CREATED']] = userdata[app.config['LAST_UPDATED']]
+                app.data.insert('users', [userdata])
+
+            logger.info('user saved %s' % (userdata))
             return userdata
 
 
@@ -82,12 +94,12 @@ class HashUserPasswordsCommand(superdesk.Command):
         users = superdesk.app.data.find_all('auth_users')
         for user in users:
             pwd = user.get('password')
-            if not pwd.startswith('$2a$'):
+            if not is_hashed(pwd):
                 updates = {}
                 hashed = hash_password(user['password'])
                 user_id = user.get('_id')
                 updates['password'] = hashed
-                superdesk.apps['users'].update(id=user_id, updates=updates, trigger_events=False)
+                superdesk.app.data.update('users', user_id, updates=updates)
 
 
 superdesk.connect('read:users', on_read_users)
@@ -96,9 +108,7 @@ superdesk.command('users:create', CreateUserCommand())
 superdesk.command('users:hash_passwords', HashUserPasswordsCommand())
 
 
-class UserRolesModel(BaseModel):
-
-    endpoint_name = 'user_roles'
+class RolesResource(Resource):
     schema = {
         'name': {
             'type': 'string',
@@ -113,12 +123,11 @@ class UserRolesModel(BaseModel):
         }
     }
     datasource = {
-        'default_sort': [('created', -1)]
+        'default_sort': [('_created', -1)]
     }
 
 
-class UsersModel(BaseModel):
-    endpoint_name = 'users'
+class UsersResource(Resource):
     additional_lookup = {
         'url': 'regex("[\w]+")',
         'field': 'username'
@@ -157,11 +166,12 @@ class UsersModel(BaseModel):
         'picture_url': {
             'type': 'string',
         },
-        'avatar': BaseModel.rel('upload', True),
-        'role': BaseModel.rel('user_roles', True),
+        'avatar': Resource.rel('upload', True),
+        'role': Resource.rel('roles', True),
+        'preferences': {'type': 'dict'},
         'workspace': {
             'type': 'dict'
-        }
+        },
     }
 
     extra_response_fields = [
@@ -175,9 +185,13 @@ class UsersModel(BaseModel):
 
     datasource = {
         'projection': {
-            'password': 0
+            'password': 0,
+            'preferences': 0
         }
     }
+
+
+class UsersService(BaseService):
 
     def on_create(self, docs):
         for doc in docs:

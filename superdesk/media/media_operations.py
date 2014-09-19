@@ -1,16 +1,17 @@
 
-from __future__ import absolute_import
-from PIL import Image
-from io import BytesIO
 import os
-import hashlib
+import arrow
 import magic
+import hashlib
 import logging
-from flask import json
 import requests
 import superdesk
+from io import BytesIO
+from PIL import Image
+from flask import json
 from .image import get_meta
 from .video import get_meta as video_meta
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,15 @@ def download_file_from_url(url):
     return BytesIO(rv.content), name, mime
 
 
+def download_file_from_encoded_str(encoded_str):
+    content = encoded_str.split(';base64,')
+    mime = content[0].split(':')[1]
+    ext = content[0].split('/')[1]
+    name = 'web_capture.' + ext
+    content = base64.b64decode(content[1])
+    return BytesIO(content), name, mime
+
+
 def process_file_from_stream(content, filename=None, content_type=None):
     content_type = content_type or content.content_type
     content = BytesIO(content.read())
@@ -61,7 +71,17 @@ def encode_metadata(metadata):
 
 
 def decode_metadata(metadata):
-    return dict((k.lower(), json.loads(v)) for k, v in metadata.items())
+    return dict((k.lower(), decode_val(v)) for k, v in metadata.items())
+
+
+def decode_val(string_val):
+    """Format dates that elastic will try to convert automatically."""
+    val = json.loads(string_val)
+    try:
+        arrow.get(val, 'YYYY-MM-DD')  # test if it will get matched by elastic
+        return str(arrow.get(val))
+    except (Exception):
+        return val
 
 
 def process_file(content, type):

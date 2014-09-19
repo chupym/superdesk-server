@@ -154,13 +154,12 @@ def step_impl_given_empty(context, resource):
 def step_impl_given_(context, resource):
     with context.app.test_request_context():
         context.app.data.remove(resource)
-        orig_items = {}
         items = [parse(item, resource) for item in json.loads(context.text)]
-        ev = getattr(context.app, 'on_insert_%s' % resource)
-        ev(items)
         context.app.data.insert(resource, items)
-        context.data = orig_items or items
+        context.data = items
         context.resource = resource
+        for item in items:
+            set_placeholder(context, '{0}_ID'.format(resource.upper()), str(item['_id']))
 
 
 @given('the "{resource}"')
@@ -198,7 +197,7 @@ def step_impl_given_config(context):
 @given('we have "{role_name}" role')
 def step_impl_given_role(context, role_name):
     with context.app.test_request_context():
-        role = context.app.data.find_one('user_roles', name=role_name, req=None)
+        role = context.app.data.find_one('roles', name=role_name, req=None)
         data = json.dumps({'role': str(role['_id'])})
     response = patch_current_user(context, data)
     assert_ok(response)
@@ -207,9 +206,9 @@ def step_impl_given_role(context, role_name):
 @given('role "{extending_name}" extends "{extended_name}"')
 def step_impl_given_role_extends(context, extending_name, extended_name):
     with context.app.test_request_context():
-        extended = context.app.data.find_one('user_roles', name=extended_name, req=None)
-        extending = context.app.data.find_one('user_roles', name=extending_name, req=None)
-        context.app.data.update('user_roles', extending['_id'], {'extends': extended['_id']})
+        extended = context.app.data.find_one('roles', name=extended_name, req=None)
+        extending = context.app.data.find_one('roles', name=extending_name, req=None)
+        context.app.data.update('roles', extending['_id'], {'extends': extended['_id']})
 
 
 @when('we post to auth')
@@ -237,6 +236,18 @@ def step_impl_when_post_url(context, url):
             parsed_url = urlparse(url)
             name = basename(parsed_url.path)
             set_placeholder(context, '%s_ID' % name.upper(), item['_id'])
+
+
+@when('we post to "{url}" with success')
+def step_impl_when_post_url_with_success(context, url):
+    data = apply_placeholders(context, context.text)
+    context.response = context.client.post(url, data=data, headers=context.headers)
+    assert_ok(context.response)
+    item = json.loads(context.response.get_data())
+    if item.get('_id'):
+        parsed_url = urlparse(url)
+        name = basename(parsed_url.path)
+        set_placeholder(context, '%s_ID' % name.upper(), item['_id'])
 
 
 @when('we put to "{url}"')
@@ -277,6 +288,7 @@ def when_we_delete_it(context):
 
 @when('we patch "{url}"')
 def step_impl_when_patch_url(context, url):
+    url = apply_placeholders(context, url)
     res = get_res(url, context)
     href = get_self_href(res, context)
     headers = if_match(context, res.get('_etag'))
@@ -497,7 +509,7 @@ def step_impl_then_get_given_file_meta(context, filename):
                        'distributed under copyright for personal and non-commercial '
                        'use. Visit http(...)',
             'compression': 'Vorbis',
-            'creation_date': '2007-01-01',
+            'creation_date': '2007-01-01T00:00:00+00:00',
             'duration': '0:08:14.728000',
             'endian': 'Little endian',
             'music_composer': 'Maxime Abbey',
@@ -506,14 +518,14 @@ def step_impl_then_get_given_file_meta(context, filename):
     elif filename == 'this_week_nasa.mp4':
         metadata = {
             'mime_type': 'video/mp4',
-            'creation_date': '2014-06-13 19:26:17',
+            'creation_date': '2014-06-13T19:26:17+00:00',
             'duration': '0:03:19.733066',
             'width': '480',
             'length': 24757257,
             'comment': 'User volume: 100.0%',
             'height': '270',
             'endian': 'Big endian',
-            'last_modification': '2014-06-13 19:26:18'
+            'last_modification': '2014-06-13T19:26:18+00:00'
         }
     else:
         raise NotImplementedError("No metadata for file '{}'.".format(filename))
@@ -634,7 +646,6 @@ def step_impl_then_get_key(context, key):
     assert_200(context.response)
     expect_json_contains(context.response, key)
     item = json.loads(context.response.get_data())
-    print('item: ', item)
     set_placeholder(context, '%s' % key, item[key])
 
 

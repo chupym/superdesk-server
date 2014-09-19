@@ -6,27 +6,80 @@ Created on May 29, 2014
 
 
 import redis
+import arrow
+import superdesk
+from bson import ObjectId
 from celery import Celery
-from superdesk import settings
+from kombu.serialization import register
+from eve.io.mongo import MongoJSONEncoder
+from eve.utils import str_to_date
+from flask import json
 
 
-celery = Celery(__name__, broker=settings.CELERY_BROKER_URL, backend=settings.CELERY_RESULT_BACKEND)
+celery = Celery(__name__)
 TaskBase = celery.Task
 
 
+def try_cast(v):
+    try:
+        str_to_date(v)  # try if it matches format
+        return arrow.get(v).datetime  # return timezone aware time
+    except:
+        try:
+            return ObjectId(v)
+        except:
+            return v
+
+
+def cast_item(o):
+    with superdesk.app.app_context():
+        for k, v in o.items():
+            if isinstance(v, dict):
+                cast_item(v)
+            else:
+                o[k] = try_cast(v)
+
+
+def loads(s):
+    o = json.loads(s)
+
+    if not o.get('args', None):
+        o['args'] = []
+
+    if not o.get('kwargs', None):
+        o['kwargs'] = {}
+
+    for v in o['args']:
+        if isinstance(v, dict):
+            cast_item(v)
+
+    for k, v in o['kwargs'].items():
+        cast_item(v)
+
+    return o
+
+
+def dumps(o):
+    with superdesk.app.app_context():
+        return MongoJSONEncoder().encode(o)
+
+
+register('eve/json', dumps, loads, content_type='application/json')
+
+
 class AppContextTask(TaskBase):
-        abstract = True
-        flask_app = None
+    abstract = True
+    serializer = 'eve/json'
 
-        def __call__(self, *args, **kwargs):
-            with self.flask_app.app_context():
-                return super().__call__(*args, **kwargs)
+    def __call__(self, *args, **kwargs):
+        with superdesk.app.app_context():
+            return super().__call__(*args, **kwargs)
 
-        def on_failure(self, exc, task_id, args, kwargs, einfo):
-            try:
-                self.flask_app.sentry.captureException()
-            except:
-                pass
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        try:
+            superdesk.app.sentry.captureException()
+        except:
+            pass
 
 
 celery.Task = AppContextTask
@@ -34,7 +87,6 @@ celery.Task = AppContextTask
 
 def init_celery(app):
     celery.conf.update(app.config)
-    celery.Task.flask_app = app
     app.celery = celery
 
 

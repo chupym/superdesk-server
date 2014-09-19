@@ -17,6 +17,7 @@ from superdesk.validator import SuperdeskValidator
 from raven.contrib.flask import Sentry
 
 
+logger = logging.getLogger('superdesk')
 sentry = Sentry(register_signal=False, wrap_wsgi=False)
 
 
@@ -75,6 +76,7 @@ def get_app(config=None):
     def server_error_handler(error):
         """Log server errors."""
         app.sentry.captureException()
+        logger.exception(error)
         return_error = superdesk.SuperdeskError(status_code=500)
         return client_error_handler(return_error)
 
@@ -99,6 +101,7 @@ def get_app(config=None):
     app.sentry = sentry
     sentry.init_app(app)
 
+    superdesk.app = app
     return app
 
 if __name__ == '__main__':

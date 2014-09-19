@@ -18,6 +18,7 @@ Feature: News Items Archive Comments
         """
 
     @auth
+    @wip
     Scenario: Create comments for item
         Given "archive"
         """
@@ -34,6 +35,9 @@ Feature: News Items Archive Comments
         """
         And we get "/item_comments"
         Then we get list with 2 items
+
+        When we get "/activity"
+        Then we get list with 4 items
 
 
     @auth
@@ -135,6 +139,5 @@ Feature: News Items Archive Comments
         Then we get "_id"
         And we get notifications
         """
-        [{"event": "archive_comment_user_mention", "extra": {
-             "mentioned_username": "joe", "user_id": "#_id#", "comment_id": "#ITEM_COMMENTS_ID#", "item_id": "xyz"}, "_created": ""}]
+        [{"event": "item:comment", "extra": {"item": "xyz"}, "_created": ""}, {"event": "activity"}]
         """

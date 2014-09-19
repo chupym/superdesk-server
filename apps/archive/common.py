@@ -6,6 +6,7 @@ from superdesk import SuperdeskError
 from superdesk.notification import push_notification
 import flask
 import superdesk
+from superdesk.resource import Resource
 
 
 GUID_TAG = 'tag'
@@ -62,12 +63,13 @@ def get_user(required=False):
 
 
 def set_user(doc):
-    user = get_user()
+    usr = get_user()
+    user = str(usr.get('_id', ''))
     sent_user = doc.get('user', None)
-    if sent_user and sent_user != user.get('_id'):
+    if sent_user and user and sent_user != user:
         raise superdesk.SuperdeskError()
-    doc['user'] = str(user.get('_id'))
-    return str(user.get('_id'))
+    doc['user'] = user
+    return user
 
 
 base_schema = {
@@ -80,7 +82,9 @@ base_schema = {
     },
     'type': {
         'type': 'string',
-        'required': True
+        'required': True,
+        'allowed': ['text', 'audio', 'video', 'picture', 'graphic', 'composite'],
+        'default': 'text'
     },
     'mimetype': {
         'type': 'string'
@@ -158,10 +162,7 @@ base_schema = {
     'creator': {
         'type': 'dict',
         'schema': {
-            'user': {
-                'type': 'objectid',
-                'data_relation': {'resource': 'users', 'field': '_id', 'embeddable': True}
-            }
+            'user': Resource.rel('users', True)
         }
     },
     'media_file': {
@@ -175,7 +176,14 @@ base_schema = {
     },
     'task_id': {
         'type': 'string'
-    }
+    },
+    'lock_user': {
+        'type': 'objectid',
+        'data_relation': {'resource': 'users', 'field': '_id', 'embeddable': True}
+    },
+    'lock_time': {
+        'type': 'datetime'
+    },
 }
 
 item_url = 'regex("[\w,.:_-]+")'
