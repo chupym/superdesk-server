@@ -1,8 +1,7 @@
 ''' Superdesk workflow.'''
 from superdesk.models import BaseModel
-from .support import Cursor
+from .support import Cursor, Request
 import superdesk
-import json
 from bson.objectid import ObjectId
 
 
@@ -114,27 +113,40 @@ class Workstation(BaseModel):
         self._process_places([document])
 
     def _process_places(self, docs):
-        for doc in docs:
-            superdesk.apps[Workplace.endpoint_name].delete({'workstation': doc['_id']}, False)
-            places = {}
-            if 'members' in doc:
-                members = {}
-                for member in doc['members']:
-                    user_id = member['user']
-                    workflows = members.get(user_id)
-                    if workflows == None:
-                        workflows = members[user_id] = set()
-                    workflows.update(member['workflows'])
+        try:
+            for doc in docs:
+                superdesk.apps[Workplace.endpoint_name].delete({'workstation': doc['_id']}, False)
+                places, present = {}, set()
+                if 'members' in doc:
+                    members = {}
+                    for member in doc['members']:
+                        user_id = member['user']
+                        existing = superdesk.apps[Workplace.endpoint_name].\
+                        get(Request(page=0), {'user': user_id})
+                        present.update((workplace['target'], str(user_id)) for workplace in existing)
+                        
+                        workflows = members.get(user_id)
+                        if workflows == None:
+                            workflows = members[user_id] = set()
+                        workflows.update(member['workflows'])
+                    
+                    for definition in WORKFLOW_DEFINITIONS:
+                        definition.process(doc['name'], members, places)
                 
-                for definition in WORKFLOW_DEFINITIONS:
-                    definition.process(doc['name'], members, places)
-            
-            dplaces = []
-            for place in places.values():
-                place['workstation'] = doc['_id']
-                dplaces.append(place)
+                dplaces = []
+                for place in places.values():
+                    if (place['target'], place['user']) in present:
+                        continue
+                    place['workstation'] = doc['_id']
+                    place['user'] = ObjectId(str(place['user']))
+                    dplaces.append(place)
                 
-            superdesk.apps[Workplace.endpoint_name].create(dplaces)
+                if dplaces:
+                    superdesk.apps[Workplace.endpoint_name].create(dplaces)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).exception(e)
+            raise
 
 
 class Workitem(BaseModel):
@@ -146,8 +158,8 @@ class Workitem(BaseModel):
             'required': True,
             'minlength': 1
         },
-        'workplace': {
-            'type': 'objectid',
-            'data_relation': {'resource': 'workplace', 'field': '_id', 'embeddable': True}
+        'target': {
+            'type': 'string',
+            'required': True
         }
     }

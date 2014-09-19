@@ -5,6 +5,9 @@ from .support import Request
 def hid(value):
     return hashlib.md5(value.encode('utf_8')).hexdigest()[:24]
 
+def tid(value):
+    return hashlib.md5(value.encode('utf_8')).hexdigest()
+    
 class Place:
 
     def __init__(self, target, name, *destinations, category=None, user='%(user_id)s'):
@@ -20,7 +23,7 @@ class Place:
 
     def create(self, markers):
         place = {
-            'target': hid(self.target % markers),
+            'target': tid(self.target % markers),
             'name': self.name % markers,
             'user': self.user % markers,
             'destinations': []}
@@ -33,7 +36,7 @@ class Place:
         for dtarget in self.destinations:
             dtarget = dtarget % markers
             if dtarget not in destinations:
-                destinations.append(hid(dtarget))
+                destinations.append(tid(dtarget))
 
 class Definition:
 
@@ -64,10 +67,10 @@ class CopyTasting(Definition):
 
     places = [
         Place('ingest', 'Ingest',
-              'spike', 'interesting %(desk_name)s', '%(desk_name)s'),
+              'spike', 'interesting', '%(desk_name)s'),
         Place('spike', 'Spike',
-              'interesting %(desk_name)s', '%(desk_name)s'),
-        Place('interesting %(desk_name)s', 'Interesting',
+              'interesting', '%(desk_name)s'),
+        Place('interesting', 'Interesting',
               'spike', '%(desk_name)s'),
         Place('%(desk_name)s', '%(desk_name)s')
     ]
@@ -77,7 +80,7 @@ class Journalist(Definition):
     name = 'Journalist'
 
     places = [
-        Place('%(desk_name)s %(user_name)s', '%(user_name)s',
+        Place('%(desk_name)s %(user_name)s', '%(desk_name)s',
               'done', category='%(desk_name)s'),
         Place('done', 'Done')
     ]
@@ -86,8 +89,11 @@ class ChiefEditor(Definition):
     name = 'Chief Editor'
 
     places = [
-        Place('%(desk_name)s', '%(desk_name)s'),
-        Place('done', 'Done')
+        Place('%(desk_name)s', '%(desk_name)s',
+              '%(desk_name)s %(journalist_name)s'),
+        Place('done', 'Done'),
+        Place('%(desk_name)s %(journalist_name)s', '%(journalist_name)s',
+              '%(desk_name)s')
     ]
     places_journalist = [
         Place('%(desk_name)s', '%(desk_name)s',
