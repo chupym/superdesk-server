@@ -52,7 +52,7 @@ class Definition:
         for user_id, workflows in members.items():
             if did not in workflows: continue
             markers['user_id'] = user_id
-            markers['user_name'] = superdesk.apps['users'].find_one(Request(), _id=user_id)['username']
+            markers['user_name'] = superdesk.get_resource_service('users').find_one(Request(), _id=user_id)['username']
 
             for pdefin in pdefinition:
                 iden = pdefin.identifier(markers)
@@ -80,7 +80,16 @@ class Journalist(Definition):
     name = 'Journalist'
 
     places = [
-        Place('%(desk_name)s %(user_name)s', '%(desk_name)s',
+        Place('%(desk_name)s %(user_name)s', 'TODO in %(desk_name)s',
+              'done', category='%(desk_name)s'),
+        Place('done', 'Done')
+    ]
+    
+class WebEditor(Definition):
+    name = 'Web editor'
+
+    places = [
+        Place('%(desk_name)s %(user_name)s', 'TODO in %(desk_name)s',
               'done', category='%(desk_name)s'),
         Place('done', 'Done')
     ]
@@ -92,7 +101,7 @@ class ChiefEditor(Definition):
         Place('%(desk_name)s', '%(desk_name)s',
               '%(desk_name)s %(journalist_name)s'),
         Place('done', 'Done'),
-        Place('%(desk_name)s %(journalist_name)s', '%(journalist_name)s',
+        Place('%(desk_name)s %(journalist_name)s', '%(journalist_name)s in %(desk_name)s',
               '%(desk_name)s')
     ]
     places_journalist = [
@@ -108,7 +117,7 @@ class ChiefEditor(Definition):
         for user_id, workflows in members.items():
             if self.id_journalist not in workflows: continue
             markers = {'desk_name': desk_name, 'journalist_id': user_id}
-            markers['journalist_name'] = superdesk.apps['users'].find_one(Request(), _id=user_id)['username']
+            markers['journalist_name'] = superdesk.get_resource_service('users').find_one(Request(), _id=user_id)['username']
             self._populate(self.id, self.places, markers, members, places)
 
 

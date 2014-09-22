@@ -1,21 +1,15 @@
 ''' Superdesk workflow.'''
-from superdesk.models import BaseModel
 from .support import Cursor, Request
 import superdesk
 from bson.objectid import ObjectId
+from superdesk.resource import Resource
+from superdesk.services import BaseService
 
 
 WORKFLOW_DEFINITIONS = []
 
 
-class Workflow(BaseModel):
-
-    workflows = {}
-
-    @classmethod
-    def register(cls, definition):
-        WORKFLOW_DEFINITIONS.append(definition)
-        cls.workflows[definition.id] = {'_id': definition.id, 'name': definition.name}
+class WorkflowResource(Resource):
 
     endpoint_name = 'workflow'
     schema = {
@@ -26,6 +20,16 @@ class Workflow(BaseModel):
     resource_methods = ['GET']
     item_methods = ['GET']
 
+
+class WorkflowService(BaseService):
+
+    workflows = {}
+
+    @classmethod
+    def register(cls, definition):
+        WORKFLOW_DEFINITIONS.append(definition)
+        cls.workflows[definition.id] = {'_id': definition.id, 'name': definition.name}
+
     def find_one(self, req, **lookup):
         id_ = lookup.get('_id')
         if not id_: return
@@ -35,7 +39,8 @@ class Workflow(BaseModel):
         return Cursor(sorted(self.workflows.values(), key=lambda workflow: workflow['name']),
                       len(self.workflows))
 
-class Workplace(BaseModel):
+
+class WorkplaceResource(Resource):
     endpoint_name = 'workplace'
     schema = {
         'name': {
@@ -64,11 +69,15 @@ class Workplace(BaseModel):
             'data_relation': {'resource': 'users', 'field': '_id', 'embeddable': True}
         }
     }
+    
+    
+class WorkplaceService(BaseService):
+    
     resource_methods = ['GET']
     item_methods = ['GET']
     
     
-class Workstation(BaseModel):
+class WorkstationResource(Resource):
     endpoint_name = 'workstation'
     schema = {
         'name': {
@@ -100,6 +109,9 @@ class Workstation(BaseModel):
             }
         }
     }
+
+
+class WorkstationService(BaseService):
     
     def on_created(self, docs):
         self._process_places(docs)
@@ -115,13 +127,13 @@ class Workstation(BaseModel):
     def _process_places(self, docs):
         try:
             for doc in docs:
-                superdesk.apps[Workplace.endpoint_name].delete({'workstation': doc['_id']}, False)
+                superdesk.get_resource_service(WorkplaceResource.endpoint_name).delete({'workstation': doc['_id']})
                 places, present = {}, set()
                 if 'members' in doc:
                     members = {}
                     for member in doc['members']:
                         user_id = member['user']
-                        existing = superdesk.apps[Workplace.endpoint_name].\
+                        existing = superdesk.get_resource_service(WorkplaceResource.endpoint_name).\
                         get(Request(page=0), {'user': user_id})
                         present.update((workplace['target'], str(user_id)) for workplace in existing)
                         
@@ -142,14 +154,14 @@ class Workstation(BaseModel):
                     dplaces.append(place)
                 
                 if dplaces:
-                    superdesk.apps[Workplace.endpoint_name].create(dplaces)
+                    superdesk.get_resource_service(WorkplaceResource.endpoint_name).create(dplaces)
         except Exception as e:
             import logging
             logging.getLogger(__name__).exception(e)
             raise
 
 
-class Workitem(BaseModel):
+class WorkitemResource(Resource):
     endpoint_name = 'workitem'
     schema = {
         'name': {
@@ -163,3 +175,7 @@ class Workitem(BaseModel):
             'required': True
         }
     }
+
+
+class WorkitemService(BaseService):
+    pass
