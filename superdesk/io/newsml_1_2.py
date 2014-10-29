@@ -5,6 +5,28 @@ from ..etree import etree
 
 class Parser():
     """NewsMl xml 1.2 parser"""
+    
+    subject_code_to_name = sorted([
+        ('01', 'art/culture'),
+        ('02', 'crime law and justice'),
+        ('03', 'disasters and accidents'),
+        ('04', 'economic news'),
+        ('05', 'education'),
+        ('06', 'environmental issues'),
+        ('07', 'health'),
+        ('08', 'human interest'),
+        ('08999', 'general'),
+        ('09', 'labour'),
+        ('10', 'lifestyle and leisure - then trade unions'),
+        ('11', 'politics'),
+        ('11998', 'mag'),
+        ('11999', 'int'),
+        ('12', 'religion'),
+        ('13', 'science'),
+        ('14', 'social issues'),
+        ('15', 'sport'),
+        ('1503', 'horse races – french wire only')
+    ], key=lambda entry: entry[0], reverse=True)
 
     def parse_message(self, tree):
         """Parse NewsMessage."""
@@ -18,8 +40,8 @@ class Parser():
             tree.find('NewsItem/NewsComponent/AdministrativeMetadata/Provider'))
         item['DescriptiveMetadata'] = self.parse_multivalued_elements(
             tree.find('NewsItem/NewsComponent/DescriptiveMetadata'))
-        item['located'] = self.parse_attributes_as_dictionary(
-            tree.find('NewsItem/NewsComponent/DescriptiveMetadata/Location'))
+        item['located'] = self.process_located(self.parse_attributes_as_dictionary(
+            tree.find('NewsItem/NewsComponent/DescriptiveMetadata/Location')))
 
         keywords = tree.findall('NewsItem/NewsComponent/DescriptiveMetadata/Property')
         item['keywords'] = self.parse_attribute_values(keywords, 'Keyword')
@@ -83,7 +105,7 @@ class Parser():
         item['versioncreated'] = self.datetime(item['NewsManagement']['ThisRevisionCreated'])
         item['firstcreated'] = self.datetime(item['NewsManagement']['FirstCreated'])
         item['pubstatus'] = item['NewsManagement']['Status']['FormalName']
-        item['subject'] = item['Subjects']
+        item['subject'] = self.process_subject(item['Subjects'])
 
         if 'HeadLine' in item['NewsLines']:
             item['headline'] = item['NewsLines']['HeadLine']
@@ -91,3 +113,26 @@ class Parser():
             item['headline'] = 'Alert'
 
         return item
+    
+    def process_subject(self, subjects):
+        processed = []
+        for subject in subjects:
+            if not 'FormalName' in subject: continue
+            qcode = subject['FormalName']
+            item = {'qcode': qcode}
+            processed.append(item)
+            
+            for prefix, name in self.subject_code_to_name:
+                if qcode.startswith(prefix):
+                    item['name'] = name
+                    break
+                
+        return processed
+    
+    def process_located(self, locations):
+        processed = []
+        for located in locations:
+            if not 'FormalName' in located: continue
+            if located['FormalName'].lower() == 'city':
+                processed.append({'name': located['Value'].upper()})
+        return processed
